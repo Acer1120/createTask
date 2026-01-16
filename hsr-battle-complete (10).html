@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Echoes of Insanity</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+<div class="game-container">
+        <div class="battlefield" id="battlefield">
+            <div class="shake-container" id="shakeContainer">
+                <div class="bg-vignette"></div>
+                <div class="atmosphere" id="atmosphere"></div>
+                <div class="hit-flash" id="hitFlash"></div>
+                
+                <!-- TURN ORDER SIDEBAR -->
+                <div class="turn-order-sidebar" id="turnOrderSidebar"></div>
+                
+                <!-- PLAYER -->
+                <!-- PLAYER CHARACTERS -->
+                <div class="players-container" id="playersContainer"></div>
+                
+                <!-- ENEMIES -->
+                <div class="enemies-container" id="enemiesContainer"></div>
+            </div>
+        </div>
+        
+        <div class="ui-bottom">
+            <div class="team-ui">
+                <div class="characters-row" id="charactersRow"></div>
+                
+                <div class="actions-panel">
+                    <div class="actions-left">
+                        <div class="sp-display">
+                            <span class="sp-label">SP:</span>
+                            <div class="sp-dots" id="spDots"></div>
+                        </div>
+                        <div class="energy-panel" id="energyPanel">
+                            <div class="energy-header">
+                                <span class="energy-title">Energy</span>
+                                <span class="energy-value" id="energyValue">0 / 200</span>
+                            </div>
+                            <div class="energy-bar">
+                                <div class="energy-bar-fill" id="energyBarFill"></div>
+                            </div>
+                            <div class="form-status" id="formStatus">Form: Base</div>
+                            <div class="form-panel">
+                                <button class="form-button lightning" id="lightningTransformBtn" onclick="transformAction('lightning')">
+                                    <span>⚡</span>
+                                    <span>Lightning Form</span>
+                                    <span class="form-cost">120</span>
+                                </button>
+                                <button class="form-button blue-fire" id="blueFireTransformBtn" onclick="transformAction('blue_fire')">
+                                    <span>🔥</span>
+                                    <span>Blue Fire Form</span>
+                                    <span class="form-cost">150</span>
+                                </button>
+                                <button class="form-button blood-lightning" id="bloodLightningTransformBtn" onclick="transformAction('blood_lightning')">
+                                    <span>💉</span>
+                                    <span>Blood Lightning</span>
+                                    <span class="form-cost">200</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="action-buttons">
+                        <button class="punch-btn" id="punchBtn" onclick="playerAction('punch')">
+                            👊
+                            <div class="button-label">Punch</div>
+                        </button>
+                        <button class="heavy-punch-btn" id="heavyPunchBtn" onclick="playerAction('heavy')">
+                            💥
+                            <span class="sp-cost">1 SP</span>
+                            <div class="button-label">Heavy</div>
+                        </button>
+                        <button class="barrage-btn" id="barrageBtn" onclick="playerAction('barrage')">
+                            👊👊
+                            <span class="sp-cost">2 SP</span>
+                            <div class="button-label">Barrage</div>
+                        </button>
+                        <button class="support-btn heal-btn" id="healBtn" onclick="playerAction('heal')">
+                            ✚
+                            <span class="sp-cost">1 SP</span>
+                            <div class="button-label">Heal</div>
+                        </button>
+                        <button class="support-btn shield-btn" id="shieldBtn" onclick="playerAction('shield')">
+                            🛡️
+                            <span class="sp-cost">1 SP</span>
+                            <div class="button-label">Shield</div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="explanation-bar" id="explanationBar">Hover or select anything in the UI to see what it does.</div>
+        </div>
+    </div>
+
+    <div class="tutorial-overlay" id="tutorialOverlay"></div>
+    <div class="tutorial-panel" id="tutorialPanel">
+        <div class="tutorial-title" id="tutorialTitle">Echoes of Insanity Tutorial</div>
+        <div class="tutorial-body" id="tutorialBody"></div>
+        <div class="tutorial-footer">
+            <div class="tutorial-step-indicator" id="tutorialStepIndicator"></div>
+            <div class="tutorial-buttons">
+                <button class="tutorial-btn" id="tutorialSkipBtn">Skip Tutorial</button>
+                <button class="tutorial-btn primary" id="tutorialNextBtn">Next</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="scripts/main.js"></script>
+</body>
+</html>

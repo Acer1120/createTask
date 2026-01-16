@@ -1,0 +1,202 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Orbitron', sans-serif;
+    background: #000;
+    overflow: hidden;
+    height: 100vh;
+    display: block;
+    color: #c8d0de;
+    text-shadow: none;
+}
+
+.game-container {
+    width: 100vw;
+    max-width: none;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    position: relative;
+}
+
+.battlefield {
+    position: relative;
+    flex: 1;
+    height: 100vh;
+    background: url('https://i.imgur.com/76HeroP.png') center/cover no-repeat;
+    border: none;
+    border-radius: 0;
+    overflow: hidden;
+    box-shadow: inset 0 0 100px rgba(0, 0, 0, 0.3);
+    transition: transform 1s cubic-bezier(0.4, 0, 0.2, 1),
+                filter 0.3s ease;
+}
+
+/* SHAKE CONTAINER - Separates shake from zoom */
+.shake-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.shake-container.shake {
+    animation: screenShake 0.4s ease-out;
+}
+
+.shake-container.shake-critical {
+    animation: criticalShake 0.6s ease-out;
+}
+
+.shake-container.shake-ultimate {
+    animation: ultimateShake 0.8s ease-out;
+}
+
+/* Disable transitions during shake to prevent choppiness */
+.battlefield.shake,
+.battlefield.shake-critical {
+    transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1), filter 0.3s ease;
+}
+
+/* CINEMATIC EFFECTS */
+.cinematic-active {
+    /* Smooth zoom with the transition above */
+    transform: scale(1.38);
+}
+
+/* FIXED: Increased opacity for better visibility, removed blur */
+.cinematic-fade {
+    opacity: 0.3;
+    transition: opacity 0.6s ease;
+}
+
+.cinematic-focus {
+    opacity: 1;
+    filter: brightness(1.15);
+    transition: opacity 0.6s ease, filter 0.6s ease;
+}
+
+/* GPU acceleration for smooth animations */
+.character, .enemy-wrapper {
+    will-change: opacity;
+    transform: translateZ(0);
+}
+
+.bg-vignette {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle, transparent 40%, rgba(0, 0, 0, 0.7) 100%);
+    z-index: 5;
+    pointer-events: none;
+}
+
+.atmosphere {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 6;
+}
+
+.dust-particle {
+    position: absolute;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    animation: dustFloat linear infinite;
+}
+
+@keyframes dustFloat {
+    0% {
+        transform: translateY(100vh) translateX(0);
+        opacity: 0;
+    }
+    10% {
+        opacity: 0.5;
+    }
+    90% {
+        opacity: 0.5;
+    }
+    100% {
+        transform: translateY(-10vh) translateX(50px);
+        opacity: 0;
+    }
+}
+
+.hit-flash {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    z-index: 100;
+    opacity: 0;
+}
+
+.hit-flash.active {
+    animation: flashHit 0.15s ease-out;
+}
+
+.hit-flash.critical {
+    animation: flashCritical 0.25s ease-out;
+}
+
+@keyframes flashHit {
+    0% { 
+        opacity: 0.15;  /* Much subtler - was 0.6 */
+        background: radial-gradient(circle, rgba(255,100,100,0.2) 0%, rgba(255,50,50,0.1) 100%);
+    }
+    100% { opacity: 0; }
+}
+
+@keyframes flashCritical {
+    0% { 
+        opacity: 0.25;  /* Much subtler - was 0.9 */
+        background: radial-gradient(circle, rgba(255,200,0,0.3) 0%, rgba(255,100,0,0.15) 100%);
+    }
+    50% { opacity: 0.15; }
+    100% { opacity: 0; }
+}
+
+@keyframes screenShake {
+    0%, 100% { transform: translate(0, 0); }
+    10% { transform: translate(-10px, -5px); }
+    20% { transform: translate(10px, 5px); }
+    30% { transform: translate(-8px, 3px); }
+    40% { transform: translate(8px, -3px); }
+    50% { transform: translate(-5px, 5px); }
+    60% { transform: translate(5px, -5px); }
+    70% { transform: translate(-3px, 2px); }
+    80% { transform: translate(3px, -2px); }
+    90% { transform: translate(-1px, 1px); }
+}
+
+@keyframes criticalShake {
+    0%, 100% { transform: translate(0, 0) rotate(0deg); }
+    10% { transform: translate(-15px, -10px) rotate(-1deg); }
+    20% { transform: translate(15px, 10px) rotate(1deg); }
+    30% { transform: translate(-12px, 5px) rotate(-0.5deg); }
+    40% { transform: translate(12px, -5px) rotate(0.5deg); }
+    50% { transform: translate(-8px, 8px) rotate(-0.3deg); }
+    60% { transform: translate(8px, -8px) rotate(0.3deg); }
+    70% { transform: translate(-4px, 4px); }
+    80% { transform: translate(4px, -4px); }
+    90% { transform: translate(-2px, 2px); }
+}
+
+@keyframes ultimateShake {
+    0%, 100% { transform: translate(0, 0) rotate(0deg); }
+    5% { transform: translate(-20px, -15px) rotate(-2deg); }
+    15% { transform: translate(18px, -10px) rotate(1.5deg); }
+    30% { transform: translate(15px, -12px) rotate(1deg); }
+    50% { transform: translate(12px, -8px) rotate(0.8deg); }
+    70% { transform: translate(8px, -6px) rotate(0.5deg); }
+    90% { transform: translate(2px, -2px); }
+}
