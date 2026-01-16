@@ -213,8 +213,8 @@ const team = [
         portrait: "⚔️",
         hp: 120,
         maxHp: 120,
-        shield: 30,
-        maxShield: 30,
+        shield: 5,
+        maxShield: 120,
         energy: 0,
         maxEnergy: 200,
         speed: 100,
@@ -234,8 +234,8 @@ const team = [
         portrait: "🛡️",
         hp: 120,
         maxHp: 120,
-        shield: 30,
-        maxShield: 30,
+        shield: 5,
+        maxShield: 120,
         energy: 0,
         maxEnergy: 200,
         speed: 95,
@@ -255,8 +255,8 @@ const team = [
         portrait: "🩹",
         hp: 110,
         maxHp: 110,
-        shield: 20,
-        maxShield: 20,
+        shield: 5,
+        maxShield: 110,
         energy: 0,
         maxEnergy: 200,
         speed: 92,
@@ -361,6 +361,7 @@ const keybinds = {
     lightning: { key: 'z', label: 'Z', description: 'Lightning Form: +60% damage, +40% break.' },
     blue_fire: { key: 'x', label: 'X', description: 'Blue Fire Form: +80% damage, +20% break, adds burn.' },
     blood_lightning: { key: 'c', label: 'C', description: 'Blood Lightning: +120% damage, +100% break, adds bleed. Devour bonuses: base +0%, lightning +20%, blue fire +30%, strengthened blue fire +50%.' },
+    speed: { key: 't', label: 'T', description: 'Toggle battle speed between 1x and 2x.' },
     confirm: { key: 'space/enter', label: '⏎', description: 'Confirm the selected action.' },
     cancel: { key: 'esc', label: 'Esc', description: 'Cancel the selected action.' },
     cycle: { key: '←/→', label: '←/→', description: 'Cycle enemies.' }
@@ -854,9 +855,9 @@ function renderCharacters() {
             <div class="stat-bar">
                 <div class="stat-bar-bg">
                     <div class="stat-bar-fill hp-fill" style="width: ${(char.hp/char.maxHp)*100}%"></div>
-                    <div class="shield-outline" style="width: ${(char.shield/char.maxShield)*100}%"></div>
+                    <div class="shield-outline" style="width: ${(char.shield/char.maxHp)*100}%"></div>
                 </div>
-                <div class="stat-text">${char.hp}/${char.maxHp}</div>
+                <div class="stat-text">${char.hp}</div>
                 ${char.shield > 0 ? '<div class="shield-icon">🛡️</div>' : ''}
             </div>
         `;
@@ -869,11 +870,17 @@ function renderCharacters() {
             if (char.id === actingPlayer.id || char.hp <= 0) return;
 
             if (sacrificeMode) {
+                pendingSacrifice = char.id;
+                clearSacrificeMode(true);
+                transformPlayer('blood_lightning');
                 return;
             }
 
             if (pendingAction === 'heal' || pendingAction === 'shield') {
-                return;
+                pendingAllyAction = char.id;
+                clearAllyTargets();
+                allowButtonConfirm = true;
+                playerAction(pendingAction);
             }
         });
         container.appendChild(div);
@@ -913,7 +920,7 @@ function renderPlayerCharacters() {
 
             if (sacrificeMode) {
                 pendingSacrifice = player.id;
-                clearSacrificeMode();
+                clearSacrificeMode(true);
                 transformPlayer('blood_lightning');
                 return;
             }
@@ -1516,8 +1523,23 @@ function setupKeyboardControls() {
         const isPlayerTurn = playerTurnActive && !isAnimating;
         lastInputSource = 'keyboard';
 
-        if (['q', 'w', 'e', 'a', 'd', 'z', 'x', 'c'].includes(key)) {
+        if (['q', 'w', 'e', 'a', 'd', 'z', 'x', 'c', 't'].includes(key)) {
             startKeyHoldHelp(key);
+        }
+
+        if (key === 't') {
+            event.preventDefault();
+            gameSpeed = gameSpeed === 1 ? 2 : 1;
+            const speedToggle = document.getElementById('speedToggleBtn');
+            if (speedToggle) {
+                speedToggle.textContent = `Speed: ${gameSpeed}x`;
+            }
+            const speedLabel = document.getElementById('tutorialSpeedLabel');
+            if (speedLabel) {
+                speedLabel.textContent = `Current speed: ${gameSpeed}x`;
+            }
+            showActionText(`SPEED ${gameSpeed}x`, '#fbbf24');
+            return;
         }
 
         if (!isPlayerTurn) return;
@@ -1574,7 +1596,7 @@ function setupKeyboardControls() {
 
     document.addEventListener('keyup', (event) => {
         const key = event.key.toLowerCase();
-        if (keyboardHelpKey && ['q', 'w', 'e', 'a', 'd', 'z', 'x', 'c'].includes(key)) {
+        if (keyboardHelpKey && ['q', 'w', 'e', 'a', 'd', 'z', 'x', 'c', 't'].includes(key)) {
             clearKeyHoldHelp();
         }
     });
@@ -3229,7 +3251,8 @@ function updateCharacterDisplay() {
         const energyText = charEl.querySelector('.energy-indicator');
         const hpBar = charEl.querySelector('.hp-fill');
         const hpText = charEl.querySelector('.stat-text');
-        const shieldOverlay = charEl.querySelector('.shield-fill-overlay');
+        const shieldOverlay = charEl.querySelector('.shield-outline');
+        const shieldIcon = charEl.querySelector('.shield-icon');
         
         const circumference = 2 * Math.PI * 44;
         const offset = circumference * (1 - sharedEnergy / char.maxEnergy);
@@ -3238,11 +3261,14 @@ function updateCharacterDisplay() {
         energyText.className = sharedEnergy >= energyCosts.lightning ? 'energy-indicator full' : 'energy-indicator';
         
         hpBar.style.width = `${(char.hp / char.maxHp) * 100}%`;
-        hpText.textContent = `${char.hp}/${char.maxHp}`;
+        hpText.textContent = `${char.hp}`;
         
         // Update shield overlay
         if (shieldOverlay) {
-            shieldOverlay.style.width = `${(char.shield / char.maxShield) * 100}%`;
+            shieldOverlay.style.width = `${(char.shield / char.maxHp) * 100}%`;
+        }
+        if (shieldIcon) {
+            shieldIcon.style.display = char.shield > 0 ? 'flex' : 'none';
         }
         
         // LOW HP WARNING for character circle - < 25%
@@ -3375,6 +3401,7 @@ function createSpeedToggle() {
     toggle.addEventListener('click', () => {
         gameSpeed = gameSpeed === 1 ? 2 : 1;
         toggle.textContent = `Speed: ${gameSpeed}x`;
+        showActionText(`SPEED ${gameSpeed}x`, '#fbbf24');
         const speedLabel = document.getElementById('tutorialSpeedLabel');
         if (speedLabel) {
             speedLabel.textContent = `Current speed: ${gameSpeed}x`;
@@ -3473,6 +3500,7 @@ function clearPendingAction() {
     pendingAction = null;
     pendingAllyAction = null;
     allowButtonConfirm = false;
+    clearAllyTargets();
     const punchBtn = document.getElementById('punchBtn');
     const heavyBtn = document.getElementById('heavyPunchBtn');
     const barrageBtn = document.getElementById('barrageBtn');
@@ -3585,7 +3613,11 @@ async function playerAction(actionType) {
     }
 
     // Second press: execute the armed action
+    const selectedAlly = isSupportAction ? pendingAllyAction : null;
     clearPendingAction();
+    if (isSupportAction) {
+        pendingAllyAction = selectedAlly;
+    }
     isAnimating = true;
 
     let success = false;
@@ -3916,9 +3948,7 @@ function startSacrificeSelection() {
 }
 
 function highlightSacrificeTargets(playerId) {
-    document.querySelectorAll('.character-circle').forEach(el => {
-        el.classList.remove('sacrifice-target');
-    });
+    clearAllyTargets();
     team.forEach(member => {
         if (member.id !== playerId && member.hp > 0) {
             const charEl = document.getElementById(`char-${member.id}`);
@@ -3934,9 +3964,11 @@ function highlightSacrificeTargets(playerId) {
     });
 }
 
-function clearSacrificeMode() {
+function clearSacrificeMode(preserveSelection = false) {
     sacrificeMode = false;
-    pendingSacrifice = null;
+    if (!preserveSelection) {
+        pendingSacrifice = null;
+    }
     document.querySelectorAll('.character-circle').forEach(el => {
         el.classList.remove('sacrifice-target');
     });
@@ -3947,9 +3979,7 @@ function clearSacrificeMode() {
 }
 
 function highlightAllyTargets(excludeId) {
-    document.querySelectorAll('.character-circle').forEach(el => {
-        el.classList.remove('sacrifice-target');
-    });
+    clearAllyTargets();
     team.forEach(member => {
         if (member.id !== excludeId && member.hp > 0) {
             const charEl = document.getElementById(`char-${member.id}`);

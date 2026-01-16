@@ -86,9 +86,8 @@
 }
 
 .character-circle.sacrifice-target {
-    outline: 2px solid rgba(248, 113, 113, 0.9);
-    outline-offset: 4px;
-    box-shadow: 0 0 18px rgba(248, 113, 113, 0.7);
+    outline: none;
+    box-shadow: none;
 }
 
 .character-circle.sacrificing,

@@ -16,24 +16,43 @@
 .character.ally-selectable {
     pointer-events: auto;
     cursor: pointer;
-    outline: 3px solid rgba(248, 113, 113, 0.8);
-    outline-offset: 6px;
-    box-shadow: 0 0 22px rgba(248, 113, 113, 0.7);
+    outline: none;
+    box-shadow: none;
 }
 
 .character.ally-heal {
-    outline-color: rgba(52, 211, 153, 0.9);
-    box-shadow: 0 0 24px rgba(52, 211, 153, 0.8);
+    outline: none;
+    box-shadow: none;
 }
 
 .character.ally-shield {
-    outline-color: rgba(96, 165, 250, 0.9);
-    box-shadow: 0 0 24px rgba(96, 165, 250, 0.8);
+    outline: none;
+    box-shadow: none;
 }
 
 .character.ally-sacrifice {
-    outline-color: rgba(248, 113, 113, 0.95);
-    box-shadow: 0 0 28px rgba(248, 113, 113, 0.9);
+    outline: none;
+    box-shadow: none;
+}
+
+.character.ally-selectable img {
+    filter: drop-shadow(0 0 32px rgba(248, 113, 113, 0.85))
+        drop-shadow(0 0 52px rgba(248, 113, 113, 0.65));
+}
+
+.character.ally-heal img {
+    filter: drop-shadow(0 0 34px rgba(52, 211, 153, 0.98))
+        drop-shadow(0 0 58px rgba(52, 211, 153, 0.75));
+}
+
+.character.ally-shield img {
+    filter: drop-shadow(0 0 34px rgba(96, 165, 250, 0.98))
+        drop-shadow(0 0 58px rgba(96, 165, 250, 0.75));
+}
+
+.character.ally-sacrifice img {
+    filter: drop-shadow(0 0 36px rgba(248, 113, 113, 1))
+        drop-shadow(0 0 62px rgba(248, 113, 113, 0.75));
 }
 
 .turn-indicator {

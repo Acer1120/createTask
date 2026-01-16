@@ -806,9 +806,43 @@ body {
 .character.ally-selectable {
     pointer-events: auto;
     cursor: pointer;
-    outline: 3px solid rgba(248, 113, 113, 0.8);
-    outline-offset: 6px;
-    box-shadow: 0 0 22px rgba(248, 113, 113, 0.7);
+    outline: none;
+    box-shadow: none;
+}
+
+.character.ally-heal {
+    outline: none;
+    box-shadow: none;
+}
+
+.character.ally-shield {
+    outline: none;
+    box-shadow: none;
+}
+
+.character.ally-sacrifice {
+    outline: none;
+    box-shadow: none;
+}
+
+.character.ally-selectable img {
+    filter: drop-shadow(0 0 32px rgba(248, 113, 113, 0.85))
+        drop-shadow(0 0 52px rgba(248, 113, 113, 0.65));
+}
+
+.character.ally-heal img {
+    filter: drop-shadow(0 0 34px rgba(52, 211, 153, 0.98))
+        drop-shadow(0 0 58px rgba(52, 211, 153, 0.75));
+}
+
+.character.ally-shield img {
+    filter: drop-shadow(0 0 34px rgba(96, 165, 250, 0.98))
+        drop-shadow(0 0 58px rgba(96, 165, 250, 0.75));
+}
+
+.character.ally-sacrifice img {
+    filter: drop-shadow(0 0 36px rgba(248, 113, 113, 1))
+        drop-shadow(0 0 62px rgba(248, 113, 113, 0.75));
 }
 
 .turn-indicator {
@@ -1336,9 +1370,8 @@ body {
 }
 
 .character-circle.sacrifice-target {
-    outline: 2px solid rgba(248, 113, 113, 0.9);
-    outline-offset: 4px;
-    box-shadow: 0 0 18px rgba(248, 113, 113, 0.7);
+    outline: none;
+    box-shadow: 0 0 22px rgba(248, 113, 113, 0.75);
 }
 
 .character-circle.sacrificing,
@@ -2514,8 +2547,8 @@ const team = [
         portrait: "⚔️",
         hp: 120,
         maxHp: 120,
-        shield: 30,
-        maxShield: 30,
+        shield: 5,
+        maxShield: 120,
         energy: 0,
         maxEnergy: 200,
         speed: 100,
@@ -2533,8 +2566,8 @@ const team = [
         portrait: "🛡️",
         hp: 120,
         maxHp: 120,
-        shield: 30,
-        maxShield: 30,
+        shield: 5,
+        maxShield: 120,
         energy: 0,
         maxEnergy: 200,
         speed: 95,
@@ -2552,8 +2585,8 @@ const team = [
         portrait: "🩹",
         hp: 110,
         maxHp: 110,
-        shield: 20,
-        maxShield: 20,
+        shield: 5,
+        maxShield: 110,
         energy: 0,
         maxEnergy: 200,
         speed: 92,
@@ -2614,6 +2647,8 @@ let currentTurnIndex = 0;
 let selectedEnemy = null;
 let isAnimating = false;
 let pendingAction = null;
+let gameSpeed = 1;
+let allowButtonConfirm = false;
 let playerTurnActive = false; // PHASE 3: Track if it's player's turn for selection marker
 let tutorialActive = false;
 let tutorialAwait = null;
@@ -2651,6 +2686,7 @@ const keybinds = {
     lightning: { key: 'z', label: 'Z', description: 'Lightning Form: +60% damage, +40% break.' },
     blue_fire: { key: 'x', label: 'X', description: 'Blue Fire Form: +80% damage, +20% break, adds burn.' },
     blood_lightning: { key: 'c', label: 'C', description: 'Blood Lightning: +120% damage, +100% break, adds bleed.' },
+    speed: { key: 't', label: 'T', description: 'Toggle battle speed between 1x and 2x.' },
     confirm: { key: 'space/enter', label: '⏎', description: 'Confirm the selected action.' },
     cancel: { key: 'esc', label: 'Esc', description: 'Cancel the selected action.' },
     cycle: { key: '←/→', label: '←/→', description: 'Cycle enemies.' }
@@ -2829,6 +2865,14 @@ const tutorialSteps = [
         highlight: '#energyPanel'
     },
     {
+        title: 'Battle Speed',
+        body: `
+            <p>Use the speed toggle to switch between 1x and 2x.</p>
+            <p id="tutorialSpeedLabel">Current speed: 1x</p>
+        `,
+        highlight: '#tutorialPanel'
+    },
+    {
         title: 'Enemy Waves and Victory',
         body: `
             <p>The fight is a 10-wave gauntlet.</p>
@@ -2884,6 +2928,7 @@ function init() {
     updatePlayerHPBars();
 
     enableButtonSounds();
+    createSpeedToggle();
     
     // Add hover listeners for break preview
     const punchBtn = document.getElementById('punchBtn');
@@ -3090,9 +3135,9 @@ function renderCharacters() {
             <div class="stat-bar">
                 <div class="stat-bar-bg">
                     <div class="stat-bar-fill hp-fill" style="width: ${(char.hp/char.maxHp)*100}%"></div>
-                    <div class="shield-outline" style="width: ${(char.shield/char.maxShield)*100}%"></div>
+                    <div class="shield-outline" style="width: ${(char.shield/char.maxHp)*100}%"></div>
                 </div>
-                <div class="stat-text">${char.hp}/${char.maxHp}</div>
+                <div class="stat-text">${char.hp}</div>
                 ${char.shield > 0 ? '<div class="shield-icon">🛡️</div>' : ''}
             </div>
         `;
@@ -3105,11 +3150,17 @@ function renderCharacters() {
             if (char.id === actingPlayer.id || char.hp <= 0) return;
 
             if (sacrificeMode) {
+                pendingSacrifice = char.id;
+                clearSacrificeMode(true);
+                transformPlayer('blood_lightning');
                 return;
             }
 
             if (pendingAction === 'heal' || pendingAction === 'shield') {
-                return;
+                pendingAllyAction = char.id;
+                clearAllyTargets();
+                allowButtonConfirm = true;
+                playerAction(pendingAction);
             }
         });
         container.appendChild(div);
@@ -3149,7 +3200,7 @@ function renderPlayerCharacters() {
 
             if (sacrificeMode) {
                 pendingSacrifice = player.id;
-                clearSacrificeMode();
+                clearSacrificeMode(true);
                 transformPlayer('blood_lightning');
                 return;
             }
@@ -3157,6 +3208,7 @@ function renderPlayerCharacters() {
             if (pendingAction === 'heal' || pendingAction === 'shield') {
                 pendingAllyAction = player.id;
                 clearAllyTargets();
+                allowButtonConfirm = true;
                 playerAction(pendingAction);
             }
         });
@@ -3710,8 +3762,23 @@ function setupKeyboardControls() {
         const key = event.key.toLowerCase();
         const isPlayerTurn = playerTurnActive && !isAnimating;
 
-        if (['q', 'w', 'e', 'a', 'd', 'z', 'x', 'c'].includes(key)) {
+        if (['q', 'w', 'e', 'a', 'd', 'z', 'x', 'c', 't'].includes(key)) {
             startKeyHoldHelp(key);
+        }
+
+        if (key === 't') {
+            event.preventDefault();
+            gameSpeed = gameSpeed === 1 ? 2 : 1;
+            const speedToggle = document.getElementById('speedToggleBtn');
+            if (speedToggle) {
+                speedToggle.textContent = `Speed: ${gameSpeed}x`;
+            }
+            const speedLabel = document.getElementById('tutorialSpeedLabel');
+            if (speedLabel) {
+                speedLabel.textContent = `Current speed: ${gameSpeed}x`;
+            }
+            showActionText(`SPEED ${gameSpeed}x`, '#fbbf24');
+            return;
         }
 
         if (!isPlayerTurn) return;
@@ -3764,7 +3831,7 @@ function setupKeyboardControls() {
 
     document.addEventListener('keyup', (event) => {
         const key = event.key.toLowerCase();
-        if (keyboardHelpKey && ['q', 'w', 'e', 'a', 'd', 'z', 'x', 'c'].includes(key)) {
+        if (keyboardHelpKey && ['q', 'w', 'e', 'a', 'd', 'z', 'x', 'c', 't'].includes(key)) {
             clearKeyHoldHelp();
         }
     });
@@ -4487,7 +4554,7 @@ async function endCinematic() {
 
 // ==================== COMBAT ====================
 function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise(resolve => setTimeout(resolve, ms / gameSpeed));
 }
 
 async function performPunch() {
@@ -5399,7 +5466,8 @@ function updateCharacterDisplay() {
         const energyText = charEl.querySelector('.energy-indicator');
         const hpBar = charEl.querySelector('.hp-fill');
         const hpText = charEl.querySelector('.stat-text');
-        const shieldOverlay = charEl.querySelector('.shield-fill-overlay');
+        const shieldOverlay = charEl.querySelector('.shield-outline');
+        const shieldIcon = charEl.querySelector('.shield-icon');
         
         const circumference = 2 * Math.PI * 44;
         const offset = circumference * (1 - sharedEnergy / char.maxEnergy);
@@ -5408,11 +5476,14 @@ function updateCharacterDisplay() {
         energyText.className = sharedEnergy >= energyCosts.lightning ? 'energy-indicator full' : 'energy-indicator';
         
         hpBar.style.width = `${(char.hp / char.maxHp) * 100}%`;
-        hpText.textContent = `${char.hp}/${char.maxHp}`;
+        hpText.textContent = `${char.hp}`;
         
         // Update shield overlay
         if (shieldOverlay) {
-            shieldOverlay.style.width = `${(char.shield / char.maxShield) * 100}%`;
+            shieldOverlay.style.width = `${(char.shield / char.maxHp) * 100}%`;
+        }
+        if (shieldIcon) {
+            shieldIcon.style.display = char.shield > 0 ? 'flex' : 'none';
         }
         
         // LOW HP WARNING for character circle - < 25%
@@ -5485,7 +5556,7 @@ function updateActiveCharacter() {
             autoSelectNextEnemy();
         }
 
-        if (pendingAction === 'punch') {
+        if (pendingAction === 'punch' || pendingAction === 'heal' || pendingAction === 'shield') {
             clearPendingAction();
         }
         
@@ -5529,6 +5600,39 @@ function updateButtonStates() {
 
     if (shieldBtn) {
         shieldBtn.disabled = !isPlayerTurn || isAnimating || skillPoints < 1;
+    }
+}
+
+function createSpeedToggle() {
+    const tutorialPanel = document.getElementById('tutorialPanel');
+    if (!tutorialPanel) return;
+    if (document.getElementById('speedToggleBtn')) return;
+
+    const toggle = document.createElement('button');
+    toggle.id = 'speedToggleBtn';
+    toggle.type = 'button';
+    toggle.className = 'tutorial-btn speed-toggle';
+    toggle.textContent = `Speed: ${gameSpeed}x`;
+    toggle.addEventListener('click', () => {
+        gameSpeed = gameSpeed === 1 ? 2 : 1;
+        toggle.textContent = `Speed: ${gameSpeed}x`;
+        showActionText(`SPEED ${gameSpeed}x`, '#fbbf24');
+        const speedLabel = document.getElementById('tutorialSpeedLabel');
+        if (speedLabel) {
+            speedLabel.textContent = `Current speed: ${gameSpeed}x`;
+        }
+    });
+
+    const footerButtons = tutorialPanel.querySelector('.tutorial-buttons');
+    if (footerButtons) {
+        footerButtons.insertBefore(toggle, footerButtons.firstChild);
+    } else {
+        tutorialPanel.appendChild(toggle);
+    }
+
+    const speedLabel = document.getElementById('tutorialSpeedLabel');
+    if (speedLabel) {
+        speedLabel.textContent = `Current speed: ${gameSpeed}x`;
     }
 }
 
@@ -5608,6 +5712,8 @@ function updateTransformButtons() {
 function clearPendingAction() {
     pendingAction = null;
     pendingAllyAction = null;
+    allowButtonConfirm = false;
+    clearAllyTargets();
     const punchBtn = document.getElementById('punchBtn');
     const heavyBtn = document.getElementById('heavyPunchBtn');
     const barrageBtn = document.getElementById('barrageBtn');
@@ -5623,6 +5729,7 @@ function clearPendingAction() {
 function armAction(actionType) {
     clearPendingAction();
     pendingAction = actionType;
+    allowButtonConfirm = false;
     const buttonMap = {
         punch: document.getElementById('punchBtn'),
         heavy: document.getElementById('heavyPunchBtn'),
@@ -5658,16 +5765,32 @@ async function playerAction(actionType) {
         return;
     }
 
+    const isSupportAction = actionType === 'heal' || actionType === 'shield';
     const hasValidTarget = selectedEnemy && enemies.find(e => e.id === selectedEnemy && e.hp > 0);
-    if (!hasValidTarget) {
+    if (!hasValidTarget && !isSupportAction) {
         showActionText('SELECT TARGET!', '#ef4444');
         clearPendingAction();
         return;
     }
 
+    if (isSupportAction) {
+        if (pendingAction !== actionType) {
+            armAction(actionType);
+            showActionText(actionType === 'heal' ? 'CONFIRM HEAL?' : 'CONFIRM SHIELD?', '#fbbf24');
+            return;
+        }
+        if (!pendingAllyAction) {
+            showActionText('SELECT AN ALLY', '#fbbf24');
+            highlightAllyTargets(actingPlayer.id);
+            return;
+        }
+    }
+
     const punchBtn = document.getElementById('punchBtn');
     const heavyBtn = document.getElementById('heavyPunchBtn');
     const barrageBtn = document.getElementById('barrageBtn');
+    const healBtn = document.getElementById('healBtn');
+    const shieldBtn = document.getElementById('shieldBtn');
 
     const buttonMap = {
         punch: punchBtn,
@@ -5683,11 +5806,18 @@ async function playerAction(actionType) {
     if (pendingAction !== actionType) {
         armAction(actionType);
         showActionText(actionType === 'heal' ? 'CONFIRM HEAL?' : actionType === 'shield' ? 'CONFIRM SHIELD?' : 'CONFIRM ATTACK?', '#fbbf24');
+        if (actionType !== 'heal' && actionType !== 'shield') {
+            allowButtonConfirm = true;
+        }
         return;
     }
 
     // Second press: execute the armed action
+    const selectedAlly = isSupportAction ? pendingAllyAction : null;
     clearPendingAction();
+    if (isSupportAction) {
+        pendingAllyAction = selectedAlly;
+    }
     isAnimating = true;
 
     let success = false;
@@ -5979,14 +6109,13 @@ function startSacrificeSelection() {
     }
     sacrificeMode = true;
     pendingSacrifice = null;
+    pendingAction = null;
     showActionText('SELECT ALLY TO SACRIFICE', '#f87171');
     highlightSacrificeTargets(player.id);
 }
 
 function highlightSacrificeTargets(playerId) {
-    document.querySelectorAll('.character-circle').forEach(el => {
-        el.classList.remove('sacrifice-target');
-    });
+    clearAllyTargets();
     team.forEach(member => {
         if (member.id !== playerId && member.hp > 0) {
             const charEl = document.getElementById(`char-${member.id}`);
@@ -5996,26 +6125,28 @@ function highlightSacrificeTargets(playerId) {
             const spriteEl = document.getElementById(`playerChar-${member.id}`);
             if (spriteEl) {
                 spriteEl.classList.add('ally-selectable');
+                spriteEl.classList.add('ally-sacrifice');
             }
         }
     });
 }
 
-function clearSacrificeMode() {
+function clearSacrificeMode(preserveSelection = false) {
     sacrificeMode = false;
-    pendingSacrifice = null;
+    if (!preserveSelection) {
+        pendingSacrifice = null;
+    }
     document.querySelectorAll('.character-circle').forEach(el => {
         el.classList.remove('sacrifice-target');
     });
     document.querySelectorAll('.character.player').forEach(el => {
         el.classList.remove('ally-selectable');
+        el.classList.remove('ally-sacrifice');
     });
 }
 
 function highlightAllyTargets(excludeId) {
-    document.querySelectorAll('.character-circle').forEach(el => {
-        el.classList.remove('sacrifice-target');
-    });
+    clearAllyTargets();
     team.forEach(member => {
         if (member.id !== excludeId && member.hp > 0) {
             const charEl = document.getElementById(`char-${member.id}`);
@@ -6025,6 +6156,12 @@ function highlightAllyTargets(excludeId) {
             const spriteEl = document.getElementById(`playerChar-${member.id}`);
             if (spriteEl) {
                 spriteEl.classList.add('ally-selectable');
+                if (pendingAction === 'heal') {
+                    spriteEl.classList.add('ally-heal');
+                }
+                if (pendingAction === 'shield') {
+                    spriteEl.classList.add('ally-shield');
+                }
             }
         }
     });
@@ -6036,6 +6173,9 @@ function clearAllyTargets() {
     });
     document.querySelectorAll('.character.player').forEach(el => {
         el.classList.remove('ally-selectable');
+        el.classList.remove('ally-heal');
+        el.classList.remove('ally-shield');
+        el.classList.remove('ally-sacrifice');
     });
 }
 
