@@ -1,0 +1,1 @@
+To play the game just open the file that says open_game.html
