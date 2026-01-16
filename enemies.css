@@ -46,13 +46,35 @@
 }
 
 .enemy-wrapper.dead {
-    opacity: 0.3;
+    opacity: 0.35;
     pointer-events: none;
     filter: grayscale(1);
 }
 
+.enemy-wrapper.dead::after {
+    content: '✖';
+    position: absolute;
+    top: 35%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 80px;
+    font-weight: 900;
+    color: rgba(239, 68, 68, 0.9);
+    text-shadow: 0 0 18px rgba(239, 68, 68, 0.9), 0 0 30px rgba(239, 68, 68, 0.7);
+    animation: deadPulse 1.2s ease-in-out infinite;
+    z-index: 4;
+    pointer-events: none;
+}
+
 .enemy-wrapper.broken .enemy-sprite {
     filter: grayscale(80%) brightness(0.6);
+}
+
+.enemy-wrapper.dead .enemy-sprite {
+    transform: translateY(70px) rotate(-8deg);
+    transition: transform 0.8s ease-out;
+    filter: drop-shadow(0 5px 15px rgba(0, 0, 0, 0.9)) grayscale(1) brightness(0.5);
+    animation: deadGlow 1.6s ease-in-out infinite;
 }
 
 .enemy-stats {
@@ -99,6 +121,7 @@
     color: #fbbf24;
     text-shadow: 0 0 10px rgba(251, 191, 36, 0.9), 0 0 18px rgba(251, 191, 36, 0.6);
     transform: scale(1.12);
+    animation: weaknessGlowPulse 1.4s ease-in-out infinite;
 }
 
 @keyframes weaknessPulse {
@@ -109,6 +132,35 @@
     50% {
         filter: none;
         transform: scale(1.08);
+    }
+}
+
+@keyframes deadGlow {
+    0%, 100% {
+        filter: drop-shadow(0 0 18px rgba(239, 68, 68, 0.6)) grayscale(1) brightness(0.5);
+    }
+    50% {
+        filter: drop-shadow(0 0 28px rgba(239, 68, 68, 0.9)) grayscale(1) brightness(0.6);
+    }
+}
+
+@keyframes deadPulse {
+    0%, 100% {
+        opacity: 0.8;
+        transform: translate(-50%, -50%) scale(1);
+    }
+    50% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1.08);
+    }
+}
+
+@keyframes weaknessGlowPulse {
+    0%, 100% {
+        text-shadow: 0 0 12px rgba(251, 191, 36, 0.9), 0 0 20px rgba(251, 191, 36, 0.6);
+    }
+    50% {
+        text-shadow: 0 0 20px rgba(251, 191, 36, 1), 0 0 30px rgba(251, 191, 36, 0.85);
     }
 }
 
@@ -285,6 +337,31 @@
 .enemy-wrapper.selected .selection-circle {
     opacity: 1;
     animation: ovalPulse 1.8s ease-in-out infinite;
+}
+
+.enemy-wrapper.boss .enemy-name {
+    color: rgba(253, 224, 71, 0.95);
+}
+
+.enemy-wrapper.boss .enemy-sprite {
+    filter: drop-shadow(0 0 24px rgba(253, 224, 71, 0.8)) drop-shadow(0 20px 40px rgba(0, 0, 0, 0.9));
+}
+
+.enemy-wrapper.boss {
+    filter: drop-shadow(0 0 18px rgba(253, 224, 71, 0.6));
+}
+
+.boss-indicator {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 6px;
+    border-radius: 6px;
+    background: rgba(239, 68, 68, 0.2);
+    border: 1px solid rgba(239, 68, 68, 0.8);
+    color: #fecaca;
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: 1px;
 }
 
 @keyframes ovalPulse {

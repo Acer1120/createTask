@@ -224,7 +224,9 @@ const team = [
         counterStacks: 0,  // NEW: Counter system
         maxCounterStacks: 3,
         baseDamage: 25,  // NEW: For counter attack calculations
-        form: 'base'
+        form: 'base',
+        bloodLightningBonus: 0,
+        sacrificedForm: null
     },
     {
         id: 2,
@@ -243,7 +245,9 @@ const team = [
         counterStacks: 0,  // NEW: Counter system
         maxCounterStacks: 3,
         baseDamage: 22,  // NEW: For counter attack calculations
-        form: 'base'
+        form: 'base',
+        bloodLightningBonus: 0,
+        sacrificedForm: null
     },
     {
         id: 3,
@@ -262,7 +266,9 @@ const team = [
         counterStacks: 0,
         maxCounterStacks: 3,
         baseDamage: 20,
-        form: 'base'
+        form: 'base',
+        bloodLightningBonus: 0,
+        sacrificedForm: null
     }
 ];
 
@@ -276,12 +282,14 @@ const maxSkillPoints = 5;
 const energyCosts = {
     lightning: 120,
     blue_fire: 150,
+    strengthened_blue_fire: 150,
     blood_lightning: 200
 };
 const formEffects = {
     base: { damageMultiplier: 1, breakMultiplier: 1, bleed: 0, burn: 0 },
     lightning: { damageMultiplier: 1.6, breakMultiplier: 1.4, bleed: 0, burn: 0 },
     blue_fire: { damageMultiplier: 1.8, breakMultiplier: 1.2, bleed: 0, burn: 18 },
+    strengthened_blue_fire: { damageMultiplier: 2.3, breakMultiplier: 1.5, bleed: 0, burn: 24 },
     blood_lightning: { damageMultiplier: 2.2, breakMultiplier: 2.0, bleed: 22, burn: 0 }
 };
 const availableForms = {
@@ -326,6 +334,9 @@ let audioMusicTimer = null;
 let audioStep = 0;
 let keyboardHelpTimer = null;
 let keyboardHelpKey = null;
+let gameSpeed = 1; // 1x or 2x speed
+let allowButtonConfirm = false; // Track if confirm is allowed (via click/space/enter)
+let lastInputSource = 'mouse';
 
 // Element damage colors
 const elementColors = {
@@ -349,7 +360,7 @@ const keybinds = {
     shield: { key: 'd', label: 'D', description: 'Shield: spend 1 SP to grant shield to the most injured ally.' },
     lightning: { key: 'z', label: 'Z', description: 'Lightning Form: +60% damage, +40% break.' },
     blue_fire: { key: 'x', label: 'X', description: 'Blue Fire Form: +80% damage, +20% break, adds burn.' },
-    blood_lightning: { key: 'c', label: 'C', description: 'Blood Lightning: +120% damage, +100% break, adds bleed.' },
+    blood_lightning: { key: 'c', label: 'C', description: 'Blood Lightning: +120% damage, +100% break, adds bleed. Devour bonuses: base +0%, lightning +20%, blue fire +30%, strengthened blue fire +50%.' },
     confirm: { key: 'space/enter', label: '⏎', description: 'Confirm the selected action.' },
     cancel: { key: 'esc', label: 'Esc', description: 'Cancel the selected action.' },
     cycle: { key: '←/→', label: '←/→', description: 'Cycle enemies.' }
@@ -366,6 +377,10 @@ function autoSelectNextEnemy() {
     }
 }
 
+function resetArmedConfirm() {
+    allowButtonConfirm = false;
+}
+
 function getRandomWeaknesses() {
     const elements = ['🔥', '⚡', '💧', '❄️', '✨', '🌿'];
     const count = Math.random() < 0.6 ? 1 : 2;
@@ -377,13 +392,14 @@ function createEnemiesForWave(wave) {
     const hpMultiplier = 1 + 0.35 * (wave - 1);      // Enemies get tankier each wave
     const toughMultiplier = 1 + 0.25 * (wave - 1);   // Toughness also scales
     const speedBonus = (wave - 1) * 3;               // Slightly faster each wave
+    const attackMultiplier = 1 + 0.08 * (wave - 1);  // Attacks scale with waves
 
     const shadowBaseHp = 180;
     const shadowBaseTough = 100;
     const voidBaseHp = 150;
     const voidBaseTough = 80;
 
-    return [
+    const waveEnemies = [
         {
             id: 1,
             name: `Shadow Beast W${wave}`,
@@ -398,7 +414,8 @@ function createEnemiesForWave(wave) {
             originalPosition: { right: 360, bottom: 520 },
             isBroken: false,
             breakTurnsRemaining: 0,
-            breakDamageMultiplier: 2.0
+            breakDamageMultiplier: 2.0,
+            attackMultiplier
         },
         {
             id: 2,
@@ -414,9 +431,35 @@ function createEnemiesForWave(wave) {
             originalPosition: { right: 500, bottom: 580 },
             isBroken: false,
             breakTurnsRemaining: 0,
-            breakDamageMultiplier: 2.0
+            breakDamageMultiplier: 2.0,
+            attackMultiplier
         }
     ];
+
+    if (wave === maxWaves) {
+        const bossHp = Math.round(shadowBaseHp * hpMultiplier * 3);
+        const bossTough = Math.round(shadowBaseTough * toughMultiplier * 2);
+        waveEnemies.push({
+            id: 3,
+            name: 'Shadow Lord',
+            emoji: "👑",
+            hp: bossHp,
+            maxHp: bossHp,
+            toughness: bossTough,
+            maxToughness: bossTough,
+            weaknesses: getRandomWeaknesses(),
+            speed: 110 + speedBonus,
+            position: { right: 640, bottom: 640 },
+            originalPosition: { right: 640, bottom: 640 },
+            isBroken: false,
+            breakTurnsRemaining: 0,
+            breakDamageMultiplier: 2.0,
+            attackMultiplier: attackMultiplier * 1.15,
+            isBoss: true
+        });
+    }
+
+    return waveEnemies;
 }
 
 // Tutorial state
@@ -501,6 +544,14 @@ const tutorialSteps = [
             </ul>
         `,
         highlight: '.actions-panel'
+    },
+    {
+        title: 'Battle Speed',
+        body: `
+            <p>Use the speed toggle in this panel to control pacing.</p>
+            <p id="tutorialSpeedLabel">Current speed: 1x</p>
+        `,
+        highlight: '#tutorialPanel'
     },
     {
         title: 'Weakness and Break',
@@ -597,7 +648,7 @@ function init() {
                 const enemy = enemies.find(e => e.id === selectedEnemy);
                 const currentTurn = getCurrentTurn();
                 const currentPlayer = currentTurn && currentTurn.type === 'player' ? team.find(p => p.id === currentTurn.id) : null;
-                const previewDamage = calculateBreakDamage(50, enemy, currentPlayer);
+                const previewDamage = getBreakPreviewDamage('punch', enemy, currentPlayer);
                 updateBreakPreview(selectedEnemy, previewDamage);
             }
         });
@@ -610,7 +661,7 @@ function init() {
                 const currentTurn = getCurrentTurn();
                 const currentPlayer = currentTurn && currentTurn.type === 'player' ? team.find(p => p.id === currentTurn.id) : null;
                 if (enemy) {
-                    const previewDamage = calculateBreakDamage(enemy.toughness, enemy, currentPlayer);
+                    const previewDamage = getBreakPreviewDamage('heavy', enemy, currentPlayer);
                     updateBreakPreview(selectedEnemy, previewDamage);
                 }
             }
@@ -623,7 +674,7 @@ function init() {
                 const enemy = enemies.find(e => e.id === selectedEnemy);
                 const currentTurn = getCurrentTurn();
                 const currentPlayer = currentTurn && currentTurn.type === 'player' ? team.find(p => p.id === currentTurn.id) : null;
-                const previewDamage = calculateBreakDamage(200, enemy, currentPlayer); // 50 x 4 hits
+                const previewDamage = getBreakPreviewDamage('barrage', enemy, currentPlayer); // 50 x 4 hits
                 updateBreakPreview(selectedEnemy, previewDamage);
             }
         });
@@ -633,6 +684,7 @@ function init() {
     autoSelectNextEnemy();
     
     setupUIExplanations();
+    createSpeedToggle();
     initTutorial();
     updateFormButtonVisibility();
     
@@ -712,6 +764,7 @@ function playSfx(type) {
 function enableButtonSounds() {
     document.querySelectorAll('button').forEach(btn => {
         btn.addEventListener('pointerdown', () => {
+            lastInputSource = 'mouse';
             if (!audioContext) {
                 initAudio();
             }
@@ -734,6 +787,18 @@ function updateFormButtonVisibility() {
     }
     if (blueFireBtn) {
         blueFireBtn.style.display = availableForms.blue_fire && lockedForm !== 'lightning' ? '' : 'none';
+        const titleEl = blueFireBtn.querySelector('span:nth-child(2)');
+        const costEl = blueFireBtn.querySelector('.form-cost');
+        if (currentTurn && currentTurn.type === 'player') {
+            const player = team.find(p => p.id === currentTurn.id);
+            if (player && player.form === 'blue_fire') {
+                if (titleEl) titleEl.textContent = 'Strengthened Blue Fire';
+                if (costEl) costEl.textContent = energyCosts.strengthened_blue_fire;
+            } else {
+                if (titleEl) titleEl.textContent = 'Blue Fire Form';
+                if (costEl) costEl.textContent = energyCosts.blue_fire;
+            }
+        }
     }
     if (bloodLightningBtn) {
         bloodLightningBtn.style.display = availableForms.blood_lightning && lockedForm !== 'blue_fire' ? '' : 'none';
@@ -856,6 +921,7 @@ function renderPlayerCharacters() {
             if (pendingAction === 'heal' || pendingAction === 'shield') {
                 pendingAllyAction = player.id;
                 clearAllyTargets();
+                allowButtonConfirm = true;
                 playerAction(pendingAction);
             }
         });
@@ -876,7 +942,7 @@ function renderEnemies() {
     
     enemies.forEach((enemy, index) => {
         const div = document.createElement('div');
-        div.className = 'enemy-wrapper';
+        div.className = `enemy-wrapper${enemy.isBoss ? ' boss' : ''}`;
         div.id = `enemy-${enemy.id}`;
 
         div.style.right = enemy.position.right + 'px';
@@ -886,7 +952,7 @@ function renderEnemies() {
         div.innerHTML = `
             <div class="enemy-stats">
                 <div class="enemy-header">
-                    <div class="enemy-name">${enemy.name}</div>
+                <div class="enemy-name">${enemy.name}${enemy.isBoss ? ' <span class="boss-indicator">BOSS</span>' : ''}</div>
                     <div class="enemy-weaknesses">
                         ${enemy.weaknesses.map(w => `<span>${w}</span>`).join('')}
                     </div>
@@ -910,6 +976,7 @@ function renderEnemies() {
     if (spriteDiv && enemy.hp > 0) {
         const clickHandler = (e) => {
             e.stopPropagation();
+            lastInputSource = 'mouse';
             selectEnemy(enemy.id);
         };
         spriteDiv.onclick = clickHandler;
@@ -956,7 +1023,10 @@ function selectEnemy(enemyId) {
     const attackActions = ['punch', 'heavy', 'barrage'];
     const pendingAttack = pendingAction && attackActions.includes(pendingAction) ? pendingAction : null;
     if (!isAnimating && lastEnemyClickId === enemyId && now - lastEnemyClickTime < 380) {
-        playerAction(pendingAttack || 'punch');
+        const actionToConfirm = pendingAttack || 'punch';
+        pendingAction = actionToConfirm;
+        allowButtonConfirm = true;
+        playerAction(actionToConfirm);
     }
     lastEnemyClickId = enemyId;
     lastEnemyClickTime = now;
@@ -987,7 +1057,7 @@ function selectEnemy(enemyId) {
     if (playerTurnActive) {
         const currentTurn = getCurrentTurn();
         const currentPlayer = currentTurn && currentTurn.type === 'player' ? team.find(p => p.id === currentTurn.id) : null;
-        const previewDamage = calculateBreakDamage(50, enemy, currentPlayer);
+        const previewDamage = getBreakPreviewDamage(pendingAction || 'punch', enemy, currentPlayer);
         updateBreakPreview(enemyId, previewDamage);
     }
     
@@ -1020,8 +1090,12 @@ function updateBreakPreview(enemyId, toughnessDamage) {
     // If bar is empty, don't show preview
     if (currentToughnessPercent <= 0) return;
     
+    const totalDamage = Array.isArray(toughnessDamage)
+        ? toughnessDamage.reduce((sum, val) => sum + val, 0)
+        : toughnessDamage;
+
     // Calculate how much damage we can apply to current toughness
-    const damageToApply = Math.min(toughnessDamage, enemy.toughness);
+    const damageToApply = Math.min(totalDamage, enemy.toughness);
     const damagePercent = (damageToApply / enemy.maxToughness) * 100;
     
     // CAP preview at current toughness - only affect filled portion
@@ -1041,12 +1115,36 @@ function updateBreakPreview(enemyId, toughnessDamage) {
     
     // Add red glow if this attack will break the enemy
     // ONLY for selected enemy during player turn
-    const afterDamage = Math.max(0, enemy.toughness - toughnessDamage);
+    const afterDamage = Math.max(0, enemy.toughness - totalDamage);
     if (afterDamage <= 0 && !enemy.isBroken && playerTurnActive && selectedEnemy === enemyId) {
         enemyWrapper.classList.add('will-break');
     } else {
         enemyWrapper.classList.remove('will-break');
     }
+}
+
+function calculateBreakPreviewDamage(baseToughnessDamage, attacker) {
+    let toughnessDamage = baseToughnessDamage;
+    if (attacker && attacker.form) {
+        const effects = formEffects[attacker.form] || formEffects.base;
+        toughnessDamage = Math.floor(toughnessDamage * effects.breakMultiplier);
+        if (attacker.form === 'blood_lightning' && attacker.bloodLightningBonus) {
+            toughnessDamage = Math.floor(toughnessDamage * (1 + attacker.bloodLightningBonus));
+        }
+    }
+    return toughnessDamage;
+}
+
+function getBreakPreviewDamage(actionType, enemy, attacker) {
+    if (!enemy) return 0;
+    if (actionType === 'heavy') {
+        return calculateBreakPreviewDamage(enemy.toughness, attacker);
+    }
+    if (actionType === 'barrage') {
+        const perHit = calculateBreakPreviewDamage(50, attacker);
+        return [perHit, perHit, perHit, perHit];
+    }
+    return calculateBreakPreviewDamage(50, attacker);
 }
 
 function clearBreakPreviews() {
@@ -1340,18 +1438,20 @@ function setupUIExplanations() {
     const energyPanel = document.getElementById('energyPanel');
     const healBtn = document.getElementById('healBtn');
     const shieldBtn = document.getElementById('shieldBtn');
+    const speedBtn = document.getElementById('speedToggleBtn');
 
     setupExplanationForElement(punchBtn, 'Punch: free single hit. Builds SP and Energy. Click twice to confirm.');
     setupExplanationForElement(heavyBtn, 'Heavy: costs 1 SP. Big damage and heavy break. Double-tap to confirm.');
     setupExplanationForElement(barrageBtn, 'Barrage: costs 2 SP. Four quick hits that shred broken targets. Double-tap to confirm.');
     setupExplanationForElement(spDisplay, 'SP (Skill Points): spent on Heavy (1) and Barrage (2). You gain SP by attacking.');
     setupExplanationForElement(lightningBtn, 'Lightning Form: +60% damage, +40% break. Locks other paths for that unit.');
-    setupExplanationForElement(blueFireBtn, 'Blue Fire Form: +80% damage, +20% break, adds burn. Locks other paths for that unit.');
+    setupExplanationForElement(blueFireBtn, 'Blue Fire Form: +80% damage, +20% break, adds burn. Strengthened Blue Fire: +130% damage, +50% break, stronger burn (24).');
     setupExplanationForElement(bloodLightningBtn, 'Blood Lightning: +120% damage, +100% break, adds bleed. Locks other paths for that unit.');
-    setupExplanationForElement(energyPanel, 'Shared Energy builds when you use skills. Spend it to activate forms.');
+    setupExplanationForElement(bloodLightningBtn, 'Blood Lightning: +120% damage, +100% break, adds bleed. Devour bonuses: base +0%, lightning +20%, blue fire +30%, strengthened blue fire +50%.');
     setupExplanationForElement(healBtn, 'Heal: spend 1 SP to restore HP to the most injured ally.');
     setupExplanationForElement(shieldBtn, 'Shield: spend 1 SP to grant shield to the most injured ally.');
 }
+    setupExplanationForElement(speedBtn, 'Speed: toggle between 1x and 2x battle pacing.');
 
 function setKeybindBadges() {
     const badgeMap = [
@@ -1387,7 +1487,7 @@ function startKeyHoldHelp(actionKey) {
         const blurb = document.getElementById('hoverBlurb');
         if (blurb) {
             blurb.style.left = '50%';
-            blurb.style.top = '78%';
+            blurb.style.top = '50%';
             blurb.style.transform = 'translate(-50%, -50%)';
             blurb.classList.add('visible');
         }
@@ -1401,6 +1501,12 @@ function clearKeyHoldHelp() {
     }
     keyboardHelpKey = null;
     resetExplanationText();
+    const blurb = document.getElementById('hoverBlurb');
+    if (blurb) {
+        blurb.style.left = '';
+        blurb.style.top = '';
+        blurb.style.transform = '';
+    }
 }
 
 function setupKeyboardControls() {
@@ -1408,6 +1514,7 @@ function setupKeyboardControls() {
         if (event.repeat) return;
         const key = event.key.toLowerCase();
         const isPlayerTurn = playerTurnActive && !isAnimating;
+        lastInputSource = 'keyboard';
 
         if (['q', 'w', 'e', 'a', 'd', 'z', 'x', 'c'].includes(key)) {
             startKeyHoldHelp(key);
@@ -1430,8 +1537,10 @@ function setupKeyboardControls() {
         if (key === 'enter' || key === ' ') {
             event.preventDefault();
             if (pendingAction) {
+                allowButtonConfirm = true;
                 playerAction(pendingAction);
             } else if (selectedEnemy) {
+                allowButtonConfirm = true;
                 playerAction('punch');
             }
             return;
@@ -1446,6 +1555,8 @@ function setupKeyboardControls() {
         };
         if (actionMap[key]) {
             event.preventDefault();
+        lastInputSource = 'keyboard';
+            allowButtonConfirm = false;
             playerAction(actionMap[key]);
             return;
         }
@@ -1477,6 +1588,13 @@ function cycleEnemy(direction = 1) {
         ? 0
         : (currentIndex + direction + living.length) % living.length;
     selectEnemy(living[nextIndex].id);
+    if (playerTurnActive) {
+        const enemy = enemies.find(e => e.id === selectedEnemy);
+        const currentTurn = getCurrentTurn();
+        const currentPlayer = currentTurn && currentTurn.type === 'player' ? team.find(p => p.id === currentTurn.id) : null;
+        clearBreakPreviews();
+        updateBreakPreview(selectedEnemy, getBreakPreviewDamage(pendingAction || 'punch', enemy, currentPlayer));
+    }
 }
 
 function initTutorial() {
@@ -1905,7 +2023,7 @@ function applyPlayerFormClass(player) {
     const el = document.getElementById(`playerChar-${player.id}`);
     if (!el) return;
 
-    el.classList.remove('form-lightning', 'form-blood-lightning', 'form-blue-fire');
+    el.classList.remove('form-lightning', 'form-blood-lightning', 'form-blue-fire', 'form-strengthened-blue-fire');
 
     if (player.form === 'lightning') {
         el.classList.add('form-lightning');
@@ -1913,6 +2031,18 @@ function applyPlayerFormClass(player) {
         el.classList.add('form-blood-lightning');
     } else if (player.form === 'blue_fire') {
         el.classList.add('form-blue-fire');
+    } else if (player.form === 'strengthened_blue_fire') {
+        el.classList.add('form-strengthened-blue-fire');
+    }
+
+    if (player.form === 'strengthened_blue_fire') {
+        const elementsEl = el.querySelector('.player-elements');
+        if (elementsEl) {
+            elementsEl.innerHTML = `
+                ${player.elements.map(elIcon => `<span class="element-icon">${elIcon}</span>`).join('')}
+                <span class="element-icon">🔥</span>
+            `;
+        }
     }
 }
 
@@ -2005,6 +2135,9 @@ function calculateDamage(baseDamage, target, attacker) {
     if (attacker && attacker.form) {
         const effects = formEffects[attacker.form] || formEffects.base;
         damage = Math.floor(damage * effects.damageMultiplier);
+        if (attacker.form === 'blood_lightning' && attacker.bloodLightningBonus) {
+            damage = Math.floor(damage * (1 + attacker.bloodLightningBonus));
+        }
     }
 
     return damage;
@@ -2015,6 +2148,9 @@ function calculateBreakDamage(baseToughnessDamage, target, attacker) {
     if (attacker && attacker.form) {
         const effects = formEffects[attacker.form] || formEffects.base;
         toughnessDamage = Math.floor(toughnessDamage * effects.breakMultiplier);
+        if (attacker.form === 'blood_lightning' && attacker.bloodLightningBonus) {
+            toughnessDamage = Math.floor(toughnessDamage * (1 + attacker.bloodLightningBonus));
+        }
     }
 
     const overkill = Math.max(0, toughnessDamage - target.toughness);
@@ -2186,7 +2322,7 @@ async function endCinematic() {
 
 // ==================== COMBAT ====================
 function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise(resolve => setTimeout(resolve, ms / gameSpeed));
 }
 
 async function performPunch() {
@@ -2214,8 +2350,6 @@ async function performPunch() {
         console.log('Invalid target');
         return false;
     }
-
-    handleTutorialProgress('confirm_attack');
 
     handleTutorialProgress('confirm_attack');
     
@@ -2391,8 +2525,6 @@ async function performHeavyPunch() {
     const targetEnemy = enemies.find(e => e.id === selectedEnemy);
     
     if (!targetEnemy || targetEnemy.hp <= 0) return false;
-
-    handleTutorialProgress('confirm_attack');
 
     handleTutorialProgress('confirm_attack');
     
@@ -2574,8 +2706,6 @@ async function performPunchBarrage() {
     const targetEnemy = enemies.find(e => e.id === selectedEnemy);
     
     if (!targetEnemy || targetEnemy.hp <= 0) return false;
-
-    handleTutorialProgress('confirm_attack');
 
     handleTutorialProgress('confirm_attack');
     
@@ -2943,7 +3073,8 @@ async function performEnemyAttack(enemyId) {
     }
     
     const isCrit = Math.random() < 0.15;
-    const damage = isCrit ? Math.floor(baseDamage * 1.5) : baseDamage;
+    const scaledBase = Math.floor(baseDamage * (enemy.attackMultiplier || 1));
+    const damage = isCrit ? Math.floor(scaledBase * 1.5) : scaledBase;
     
     // Use different animation for special attack
     if (useSpecialAttack) {
@@ -3054,9 +3185,9 @@ function updateEnemyDisplay(enemyId) {
         breakWrapper.classList.toggle('blood-break', bloodFormActive);
     }
     
-    const lastAttacker = getCurrentTurn();
-    const attacker = lastAttacker && lastAttacker.type === 'player'
-        ? team.find(p => p.id === lastAttacker.id)
+    const currentTurn = getCurrentTurn();
+    const attacker = currentTurn && currentTurn.type === 'player'
+        ? team.find(p => p.id === currentTurn.id)
         : null;
     weaknessEls.forEach(el => {
         const icon = el.textContent.trim();
@@ -3193,7 +3324,7 @@ function updateActiveCharacter() {
             const enemy = enemies.find(e => e.id === selectedEnemy);
             const currentTurn = getCurrentTurn();
             const currentPlayer = currentTurn && currentTurn.type === 'player' ? team.find(p => p.id === currentTurn.id) : null;
-            const previewDamage = calculateBreakDamage(50, enemy, currentPlayer);
+            const previewDamage = getBreakPreviewDamage(pendingAction || 'punch', enemy, currentPlayer);
             updateBreakPreview(selectedEnemy, previewDamage); // Default punch preview
         }
     }
@@ -3228,6 +3359,38 @@ function updateButtonStates() {
 
     if (shieldBtn) {
         shieldBtn.disabled = !isPlayerTurn || isAnimating || skillPoints < 1;
+    }
+}
+
+function createSpeedToggle() {
+    const tutorialPanel = document.getElementById('tutorialPanel');
+    if (!tutorialPanel) return;
+    if (document.getElementById('speedToggleBtn')) return;
+
+    const toggle = document.createElement('button');
+    toggle.id = 'speedToggleBtn';
+    toggle.type = 'button';
+    toggle.className = 'tutorial-btn speed-toggle';
+    toggle.textContent = `Speed: ${gameSpeed}x`;
+    toggle.addEventListener('click', () => {
+        gameSpeed = gameSpeed === 1 ? 2 : 1;
+        toggle.textContent = `Speed: ${gameSpeed}x`;
+        const speedLabel = document.getElementById('tutorialSpeedLabel');
+        if (speedLabel) {
+            speedLabel.textContent = `Current speed: ${gameSpeed}x`;
+        }
+    });
+
+    const footerButtons = tutorialPanel.querySelector('.tutorial-buttons');
+    if (footerButtons) {
+        footerButtons.insertBefore(toggle, footerButtons.firstChild);
+    } else {
+        tutorialPanel.appendChild(toggle);
+    }
+
+    const speedLabel = document.getElementById('tutorialSpeedLabel');
+    if (speedLabel) {
+        speedLabel.textContent = `Current speed: ${gameSpeed}x`;
     }
 }
 
@@ -3270,15 +3433,17 @@ function updateTransformButtons() {
 
     const hasLightningEnergy = sharedEnergy >= energyCosts.lightning;
     const hasBlueFireEnergy = sharedEnergy >= energyCosts.blue_fire;
+    const hasStrengthenedEnergy = sharedEnergy >= energyCosts.strengthened_blue_fire;
     const hasBloodLightningEnergy = sharedEnergy >= energyCosts.blood_lightning;
     const hasAllyToSacrifice = team.some(p => p.id !== player.id && p.hp > 0);
 
-    const canUseLightning = availableForms.lightning && hasLightningEnergy && player.form !== 'lightning' && player.form !== 'blood_lightning';
-    const canUseBlueFire = availableForms.blue_fire && hasBlueFireEnergy && player.form !== 'blue_fire' && player.form !== 'blood_lightning';
+    const canUseLightning = availableForms.lightning && hasLightningEnergy && player.form !== 'lightning' && player.form !== 'blood_lightning' && player.form !== 'strengthened_blue_fire';
+    const canUseBlueFire = availableForms.blue_fire && hasBlueFireEnergy && player.form !== 'blue_fire' && player.form !== 'blood_lightning' && player.form !== 'strengthened_blue_fire';
+    const canUseStrengthened = availableForms.blue_fire && hasStrengthenedEnergy && player.form === 'blue_fire' && player.form !== 'blood_lightning';
     const canUseBloodLightning = availableForms.blood_lightning && player.form === 'lightning' && hasBloodLightningEnergy && hasAllyToSacrifice;
 
     lightningBtn.disabled = !canUseLightning;
-    blueFireBtn.disabled = !canUseBlueFire;
+    blueFireBtn.disabled = !(canUseBlueFire || canUseStrengthened);
     bloodLightningBtn.disabled = !canUseBloodLightning;
 
     const energyPercent = Math.min(100, Math.max(0, (sharedEnergy / player.maxEnergy) * 100));
@@ -3300,13 +3465,14 @@ function updateTransformButtons() {
         }
 
     lightningBtn.classList.toggle('ready', canUseLightning);
-    blueFireBtn.classList.toggle('ready', canUseBlueFire);
+    blueFireBtn.classList.toggle('ready', canUseBlueFire || canUseStrengthened);
     bloodLightningBtn.classList.toggle('ready', canUseBloodLightning);
 }
 
 function clearPendingAction() {
     pendingAction = null;
     pendingAllyAction = null;
+    allowButtonConfirm = false;
     const punchBtn = document.getElementById('punchBtn');
     const heavyBtn = document.getElementById('heavyPunchBtn');
     const barrageBtn = document.getElementById('barrageBtn');
@@ -3322,6 +3488,7 @@ function clearPendingAction() {
 function armAction(actionType) {
     clearPendingAction();
     pendingAction = actionType;
+    allowButtonConfirm = false;
     const buttonMap = {
         punch: document.getElementById('punchBtn'),
         heavy: document.getElementById('heavyPunchBtn'),
@@ -3332,6 +3499,12 @@ function armAction(actionType) {
     const clickedButton = buttonMap[actionType];
     if (clickedButton) {
         clickedButton.classList.add('confirming');
+    }
+    if (selectedEnemy && playerTurnActive) {
+        const enemy = enemies.find(e => e.id === selectedEnemy);
+        const currentTurn = getCurrentTurn();
+        const currentPlayer = currentTurn && currentTurn.type === 'player' ? team.find(p => p.id === currentTurn.id) : null;
+        updateBreakPreview(selectedEnemy, getBreakPreviewDamage(actionType, enemy, currentPlayer));
     }
 }
 
@@ -3357,16 +3530,34 @@ async function playerAction(actionType) {
         return;
     }
 
+    const isSupportAction = actionType === 'heal' || actionType === 'shield';
     const hasValidTarget = selectedEnemy && enemies.find(e => e.id === selectedEnemy && e.hp > 0);
-    if (!hasValidTarget) {
+    if (!hasValidTarget && !isSupportAction) {
         showActionText('SELECT TARGET!', '#ef4444');
         clearPendingAction();
         return;
     }
 
+    if (isSupportAction) {
+        if (pendingAction !== actionType) {
+            armAction(actionType);
+            showActionText(actionType === 'heal' ? 'CONFIRM HEAL?' : 'CONFIRM SHIELD?', '#fbbf24');
+            return;
+        }
+        if (!pendingAllyAction) {
+            showActionText('SELECT AN ALLY', '#fbbf24');
+            highlightAllyTargets(actingPlayer.id);
+            return;
+        }
+        allowButtonConfirm = true;
+    }
+
     const punchBtn = document.getElementById('punchBtn');
     const heavyBtn = document.getElementById('heavyPunchBtn');
     const barrageBtn = document.getElementById('barrageBtn');
+
+    const healBtn = document.getElementById('healBtn');
+    const shieldBtn = document.getElementById('shieldBtn');
 
     const buttonMap = {
         punch: punchBtn,
@@ -3382,6 +3573,14 @@ async function playerAction(actionType) {
     if (pendingAction !== actionType) {
         armAction(actionType);
         showActionText(actionType === 'heal' ? 'CONFIRM HEAL?' : actionType === 'shield' ? 'CONFIRM SHIELD?' : 'CONFIRM ATTACK?', '#fbbf24');
+        if (!isSupportAction) {
+            allowButtonConfirm = true;
+        }
+        return;
+    }
+
+    if (!isSupportAction && lastInputSource === 'keyboard' && !allowButtonConfirm) {
+        showActionText('PRESS SPACE/ENTER TO CONFIRM', '#fbbf24');
         return;
     }
 
@@ -3460,6 +3659,8 @@ async function processNextTurn() {
             await processNextTurn();
             return;
         }
+        allowButtonConfirm = false;
+        lastInputSource = 'keyboard';
         applyDamageOverTime(player);
         updateCharacterDisplay();
         // It's the player's turn - wait for player input
@@ -3530,6 +3731,16 @@ function transformAction(formType) {
         startSacrificeSelection();
         return;
     }
+    if (formType === 'blue_fire') {
+        const currentTurn = getCurrentTurn();
+        if (currentTurn && currentTurn.type === 'player') {
+            const player = team.find(p => p.id === currentTurn.id);
+            if (player && player.form === 'blue_fire') {
+                transformPlayer('strengthened_blue_fire');
+                return;
+            }
+        }
+    }
     transformPlayer(formType);
 }
 
@@ -3541,7 +3752,7 @@ async function transformPlayer(formType) {
     if (!player || player.hp <= 0) return;
     if (isAnimating) return;
 
-            if (formType === 'lightning' || formType === 'blue_fire') {
+            if (formType === 'lightning' || formType === 'blue_fire' || formType === 'strengthened_blue_fire') {
         const cost = energyCosts[formType];
         if (sharedEnergy < cost) {
             showActionText(`NEED ${cost} ENERGY`, '#ef4444');
@@ -3552,23 +3763,39 @@ async function transformPlayer(formType) {
             return;
         }
 
+        if (formType === 'strengthened_blue_fire' && player.form !== 'blue_fire') {
+            showActionText('NEED BLUE FIRE FORM', '#ef4444');
+            return;
+        }
+
+        if (formType === 'strengthened_blue_fire' && sharedEnergy < energyCosts.strengthened_blue_fire) {
+            showActionText(`NEED ${energyCosts.strengthened_blue_fire} ENERGY`, '#ef4444');
+            return;
+        }
+
                 sharedEnergy = Math.max(0, sharedEnergy - cost);
                 player.form = formType;
                 playerFormLocks[player.id] = formType;
     if (formType === 'lightning') {
         availableForms.blood_lightning = true;
     }
-        showActionText(formType === 'lightning' ? 'LIGHTNING FORM!' : 'BLUE FIRE FORM!', '#fbbf24');
+        const formMessage = formType === 'lightning'
+            ? 'LIGHTNING FORM!'
+            : formType === 'blue_fire'
+                ? 'BLUE FIRE FORM!'
+                : 'STRENGTHENED BLUE FIRE!';
+        showActionText(formMessage, '#fbbf24');
 
         handleTutorialProgress('use_form');
 
         const playerEl = document.getElementById(`playerChar-${player.id}`);
         if (playerEl) {
             const rect = playerEl.getBoundingClientRect();
+            const particleCount = formType === 'lightning' ? 18 : formType === 'strengthened_blue_fire' ? 22 : 14;
             createHitParticles(
                 rect.left + rect.width / 2,
                 rect.top + rect.height / 2,
-                formType === 'lightning' ? 18 : 14,
+                particleCount,
                 'spark'
             );
         }
@@ -3609,10 +3836,13 @@ async function transformPlayer(formType) {
         isAnimating = true;
 
         // Sacrifice ally
+        const sacrificedForm = sacrifice.form || 'base';
+        const bonus = getBloodLightningBonus(sacrificedForm);
         playSacrificeAnimation(sacrifice.id);
         pendingSacrifice = null;
         sacrifice.hp = 0;
         sacrifice.shield = 0;
+        sacrifice.sacrificedForm = sacrificedForm;
         sharedEnergy = Math.max(0, sharedEnergy - cost);
         updateCharacterDisplay();
         showActionText(`${sacrifice.name} SACRIFICED`, '#ef4444');
@@ -3635,6 +3865,8 @@ async function transformPlayer(formType) {
                 playPlayerAnimation(player.id, 'lightning_to_blood', false, () => {
             player.form = 'blood_lightning';
                     playerFormLocks[player.id] = 'blood_lightning';
+                    player.bloodLightningBonus = bonus;
+                    player.sacrificedForm = sacrificedForm;
             availableForms.lightning = false;
             availableForms.blue_fire = false;
             applyPlayerFormClass(player);
@@ -3678,6 +3910,7 @@ function startSacrificeSelection() {
     }
     sacrificeMode = true;
     pendingSacrifice = null;
+    pendingAction = null;
     showActionText('SELECT ALLY TO SACRIFICE', '#f87171');
     highlightSacrificeTargets(player.id);
 }
@@ -3695,6 +3928,7 @@ function highlightSacrificeTargets(playerId) {
             const spriteEl = document.getElementById(`playerChar-${member.id}`);
             if (spriteEl) {
                 spriteEl.classList.add('ally-selectable');
+                spriteEl.classList.add('ally-sacrifice');
             }
         }
     });
@@ -3708,6 +3942,7 @@ function clearSacrificeMode() {
     });
     document.querySelectorAll('.character.player').forEach(el => {
         el.classList.remove('ally-selectable');
+        el.classList.remove('ally-sacrifice');
     });
 }
 
@@ -3724,6 +3959,12 @@ function highlightAllyTargets(excludeId) {
             const spriteEl = document.getElementById(`playerChar-${member.id}`);
             if (spriteEl) {
                 spriteEl.classList.add('ally-selectable');
+                if (pendingAction === 'heal') {
+                    spriteEl.classList.add('ally-heal');
+                }
+                if (pendingAction === 'shield') {
+                    spriteEl.classList.add('ally-shield');
+                }
             }
         }
     });
@@ -3735,6 +3976,9 @@ function clearAllyTargets() {
     });
     document.querySelectorAll('.character.player').forEach(el => {
         el.classList.remove('ally-selectable');
+        el.classList.remove('ally-heal');
+        el.classList.remove('ally-shield');
+        el.classList.remove('ally-sacrifice');
     });
 }
 
@@ -3753,6 +3997,13 @@ function playSacrificeAnimation(targetId) {
             sprite.classList.add('sacrificed');
         }, { once: true });
     }
+}
+
+function getBloodLightningBonus(form) {
+    if (form === 'lightning') return 0.2;
+    if (form === 'blue_fire') return 0.3;
+    if (form === 'strengthened_blue_fire') return 0.5;
+    return 0;
 }
 
 init();
